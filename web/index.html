@@ -32,6 +32,7 @@
 
   // --- The aircraft and its track -------------------------------------------
   const trackPoints = [];   // every position the aircraft has been at
+  let latestAgl;
 
   // const aircraft = viewer.entities.add({
   //   position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
@@ -104,6 +105,9 @@
       const position = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, t.alt);
       aircraft.position = position;
 
+      const groundHeight = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(t.lon, t.lat));
+      latestAgl = (groundHeight === undefined) ? undefined : t.alt - groundHeight;
+
       aircraft.orientation = Cesium.Transforms.headingPitchRollQuaternion(
         position,
         new Cesium.HeadingPitchRoll(
@@ -125,7 +129,9 @@
         " SPD " + Math.round(t.speed * 1.944) + " kt\n" +      // metres/second to knots
         " ALT " + Math.round(t.alt * 3.281) + " ft\n" +        // metres to feet
         " WP  " + t.wp + "\nControls \n J: turn left\n L: turn right\n I: increase speed\n K: decrease speed\n A: increase altitude\n S: decrease altitude"
-         + "\nAuto-Pilot " + autoPilot;
+         + "\nAuto-Pilot: " + autoPilot + 
+         "\nPlane-Too-Low: " + t.planeTooLow + 
+         "\nAGL: " + (latestAgl === undefined ? "-" : Math.round(latestAgl * 3.281)) + " ft";
       if (!cameraFollowing) {            // lock the camera onto the aircraft once
         viewer.trackedEntity = aircraft;
         cameraFollowing = true;
@@ -166,7 +172,9 @@
       if (held["s"]) alt -= 1; // S = lower
     }
 
-    fetch("/api/control?turn=" + turn + "&speed=" + speed + "&alt=" + alt + "&aut=" + autoPilot, { method: "POST" });
+    let url = "/api/control?turn=" + turn + "&speed=" + speed + "&alt=" + alt + "&aut=" + autoPilot;
+    if (latestAgl !== undefined) url += "&agl=" + latestAgl.toFixed(1);
+    fetch(url, { method: "POST" });
   }, 100);
 
 </script>
