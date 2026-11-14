@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mini Paragon</title>
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.119.0/Build/Cesium/Cesium.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.119.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    html, body, #map { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    #hud {
+      position: absolute; top: 12px; left: 12px; padding: 10px 14px;
+      background: rgba(10, 20, 30, 0.75); color: #e5e7e5;
+      font: 14px/1.5 monospace; white-space: pre;
+      border: 1px solid rgb(9, 9, 9); border-radius: 4px; min-width: 170px;
+    }
+    #hud.lost { color: #ff5555; border-color: #ff5555; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="hud">connecting...</div>
+
+<script>
+  // Paste your free token from https://ion.cesium.com 
+  const CESIUM_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjRfSHpBUFR0cUFRUGMwUWEiLCJqdGkiOiI3MjFhZDllOC0yM2I1LTRmNzktYWQyOC04NjFhNTc1ODgxNTIiLCJpZCI6NTQ4NDg0LCJzdWIiOiJzaGF3Q2FtcGJlbGwiLCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoibWluaS1wYXJhZ29uIiwiaWF0IjoxNzk0NTU4OTY5fQ.Tvzmqkq1e2SA8zuoXRPUA3IyTLUo-c1vWzse3kcLvKM";
+
+  Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
+  const viewer = new Cesium.Viewer("map", { terrain: Cesium.Terrain.fromWorldTerrain() });
+  const hud = document.getElementById("hud");
+
+  // --- The aircraft and its track -------------------------------------------
+  const trackPoints = [];   // every position the aircraft has been at
+
+  // const aircraft = viewer.entities.add({
+  //   position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
+  //   point: { pixelSize: 12, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+  //   label: { text: "UAV-01", font: "13px monospace", pixelOffset: new Cesium.Cartesian2(0, -22),
+  //            showBackground: true },
+  // });
+
+  const aircraft = viewer.entities.add({
+  position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
+  model: {
+    uri: "/jet.glb",
+    scale: 0.1
+    // minimumPixelSize: 80,    // never shrink below 64 px, so it stays visible from far away
+  },
+  label: { text: "UAV-01", font: "13px monospace", pixelOffset: new Cesium.Cartesian2(0, -40),
+           showBackground: true },
+  });
+
+  viewer.entities.add({
+    polyline: {
+      positions: new Cesium.CallbackProperty(() => trackPoints, false),  // re-read the list every frame
+      width: 3,
+      material: Cesium.Color.RED,
+    },
+  });
+
+  // --- The planned route (fetched once) ---------------------------------------
+  async function loadRoute() {
+    const response = await fetch("/api/route");
+    const route = await response.json();
+
+    // Draw the line through all the waypoints, back to the first to close the loop.
+    const flat = [];
+    for (const w of route) {
+      flat.push(w.lon, w.lat);
+    }
+    flat.push(route[0].lon, route[0].lat);
+
+    viewer.entities.add({
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArray(flat),
+        width: 2,
+        clampToGround: true,
+        material: Cesium.Color.CYAN,
+      },
+    });
+
+    // Draw a labelled dot on each waypoint.
+    for (let i = 0; i < route.length; i++) {
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(route[i].lon, route[i].lat),
+        point: { pixelSize: 7, color: Cesium.Color.CYAN,
+                 heightReference: Cesium.HeightReference.CLAMP_TO_GROUND },
+        label: { text: "WP" + i, font: "11px monospace", pixelOffset: new Cesium.Cartesian2(0, -14),
+                 heightReference: Cesium.HeightReference.CLAMP_TO_GROUND },
+      });
+    }
+  }
+  loadRoute();
+
+  // --- Telemetry: ask the C++ server for the aircraft's state, 10 times a second --
+  let cameraFollowing = false;
+
+  async function updateTelemetry() {
+    try {
+      const response = await fetch("/api/telemetry");
+      const t = await response.json();
+
+      const position = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, t.alt);
+      aircraft.position = position;
+
+      aircraft.orientation = Cesium.Transforms.headingPitchRollQuaternion(
+        position,
+        new Cesium.HeadingPitchRoll(
+          Cesium.Math.toRadians(t.hdg - 90),   // keep whatever heading offset you already found
+          Cesium.Math.toRadians(t.pitch*50),
+          Cesium.Math.toRadians(t.roll*5)
+        )
+      );
+
+      trackPoints.push(position);
+      if (trackPoints.length > 3000) {
+        trackPoints.shift();            // forget the oldest point so the line stays short
+      }
+
+      hud.className = "";
+      hud.textContent =
+        "Telemetry \n UAV-01\n" +
+        " HDG " + Math.round(t.hdg) + "°\n" +
+        " SPD " + Math.round(t.speed * 1.944) + " kt\n" +      // metres/second to knots
+        " ALT " + Math.round(t.alt * 3.281) + " ft\n" +        // metres to feet
+        " WP  " + t.wp + "\nControls \n J: turn left\n L: turn right\n I: increase speed\n K: decrease speed\n A: increase altitude\n S: decrease altitude";
+
+      if (!cameraFollowing) {            // lock the camera onto the aircraft once
+        viewer.trackedEntity = aircraft;
+        cameraFollowing = true;
+      }
+    } catch (error) {
+      hud.className = "lost";
+      hud.textContent = "LINK LOST";
+    }
+  }
+  setInterval(updateTelemetry, 1);
+
+  // --- Keyboard: remember which keys are held, and report them to the server ---
+  const held = {};
+
+  document.addEventListener("keydown", (e) => { held[e.key.toLowerCase()] = true; });
+  document.addEventListener("keyup",   (e) => { held[e.key.toLowerCase()] = false; });
+  window.addEventListener("blur", () => {          // clicking away must release all keys
+    for (const key in held) held[key] = false;
+  });
+
+  setInterval(() => {
+    let turn = 0;
+    let speed = 0;
+    let alt = 0;
+    if (held["j"]) turn -= 1;     // J = left
+    if (held["l"]) turn += 1;     // L = right
+    if (held["i"]) speed += 1;    // I = faster
+    if (held["k"]) speed -= 1;    // K = slower
+    if (held["a"]) alt += 1; // A = higher
+    if (held["s"]) alt -= 1; // S = lower
+    fetch("/api/control?turn=" + turn + "&speed=" + speed + "&alt=" + alt, { method: "POST" });
+  }, 2);
+
+</script>
+</body>
+</html>
