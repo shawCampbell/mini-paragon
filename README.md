@@ -36,7 +36,7 @@ Starting point of UAV in 3D environment
 ### HUD Provides Telemetry and Controls Information
 
 <div align='center'>
-<img src='./assets/hud.png' width='50%'>
+<img src='./assets/HUD.png' width='50%'>
 
 HUD
 </div>
