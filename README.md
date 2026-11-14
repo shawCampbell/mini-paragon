@@ -42,7 +42,7 @@ HUD
 </div>
 
 ### Controls
-## Turn Directions
+#### Turn Directions
 
 <table>
   <tr>
@@ -59,7 +59,7 @@ HUD
   </tr>
 </table>
 
-## Vertical Directions
+#### Vertical Directions
 
 <table>
   <tr>
