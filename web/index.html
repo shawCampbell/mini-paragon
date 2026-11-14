@@ -28,8 +28,11 @@
   const viewer = new Cesium.Viewer("map", { terrain: Cesium.Terrain.fromWorldTerrain() });
   const hud = document.getElementById("hud");
 
+  // let autoPilot = "false";
+
   // --- The aircraft and its track -------------------------------------------
   const trackPoints = [];   // every position the aircraft has been at
+  let latestAgl;
 
   // const aircraft = viewer.entities.add({
   //   position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
@@ -102,6 +105,9 @@
       const position = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, t.alt);
       aircraft.position = position;
 
+      const groundHeight = viewer.scene.globe.getHeight(Cesium.Cartographic.fromDegrees(t.lon, t.lat));
+      latestAgl = (groundHeight === undefined) ? undefined : t.alt - groundHeight;
+
       aircraft.orientation = Cesium.Transforms.headingPitchRollQuaternion(
         position,
         new Cesium.HeadingPitchRoll(
@@ -122,8 +128,10 @@
         " HDG " + Math.round(t.hdg) + "°\n" +
         " SPD " + Math.round(t.speed * 1.944) + " kt\n" +      // metres/second to knots
         " ALT " + Math.round(t.alt * 3.281) + " ft\n" +        // metres to feet
-        " WP  " + t.wp + "\nControls \n J: turn left\n L: turn right\n I: increase speed\n K: decrease speed\n A: increase altitude\n S: decrease altitude";
-
+        " WP  " + t.wp + "\nControls \n J: turn left\n L: turn right\n I: increase speed\n K: decrease speed\n A: increase altitude\n S: decrease altitude"
+         + "\nAuto-Pilot: " + autoPilot + 
+         "\nPlane-Too-Low: " + t.planeTooLow + 
+         "\nAGL: " + (latestAgl === undefined ? "-" : Math.round(latestAgl * 3.281)) + " ft";
       if (!cameraFollowing) {            // lock the camera onto the aircraft once
         viewer.trackedEntity = aircraft;
         cameraFollowing = true;
@@ -133,7 +141,7 @@
       hud.textContent = "LINK LOST";
     }
   }
-  setInterval(updateTelemetry, 1);
+  setInterval(updateTelemetry, 100);
 
   // --- Keyboard: remember which keys are held, and report them to the server ---
   const held = {};
@@ -144,18 +152,30 @@
     for (const key in held) held[key] = false;
   });
 
+  let autoPilot = false;
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key.toLowerCase() === "p") autoPilot = !autoPilot;   // P toggles autopilot
+  });
+
   setInterval(() => {
     let turn = 0;
     let speed = 0;
     let alt = 0;
-    if (held["j"]) turn -= 1;     // J = left
-    if (held["l"]) turn += 1;     // L = right
-    if (held["i"]) speed += 1;    // I = faster
-    if (held["k"]) speed -= 1;    // K = slower
-    if (held["a"]) alt += 1; // A = higher
-    if (held["s"]) alt -= 1; // S = lower
-    fetch("/api/control?turn=" + turn + "&speed=" + speed + "&alt=" + alt, { method: "POST" });
-  }, 2);
+
+    if (!autoPilot){
+      if (held["j"]) turn -= 1;     // J = left
+      if (held["l"]) turn += 1;     // L = right
+      if (held["i"]) speed += 1;    // I = faster
+      if (held["k"]) speed -= 1;    // K = slower
+      if (held["a"]) alt += 1; // A = higher
+      if (held["s"]) alt -= 1; // S = lower
+    }
+
+    let url = "/api/control?turn=" + turn + "&speed=" + speed + "&alt=" + alt + "&aut=" + autoPilot;
+    if (latestAgl !== undefined) url += "&agl=" + latestAgl.toFixed(1);
+    fetch(url, { method: "POST" });
+  }, 100);
 
 </script>
 </body>
