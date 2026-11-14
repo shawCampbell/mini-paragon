@@ -40,9 +40,10 @@ struct Aircraft {
     double alt = 100;           // metres
     double hdg = 0;             // heading in degrees, 0 = north, 90 = east
     double speed = 400;          // metres per second
-    double maxTurnRate = 10;    // degrees per second
+    double maxTurnRate = 40;    // degrees per second
     double pitch = 0;
     double roll = 0;
+    std::string autoPilot = "false";
 };
 
 // The whole simulation state lives in these global variables.
@@ -77,105 +78,132 @@ double distanceTo(Waypoint w) {
     return std::sqrt(north * north + east * east);
 }
 
-// Advance the simulation by `dt` seconds.
-void stepSim(double dt) {
-    // // Close enough to the waypoint? Aim for the next one. The % wraps back to 0 at the end.
-    // if (distanceTo(route[nextWp]) < 150) {
-    //     nextWp = (nextWp + 1) % route.size();
-    // }
+// // Advance the simulation by `dt` seconds.
+// void stepSim(double dt) {
 
-    // // How far must we turn? Between -180 and 180: negative = left, positive = right.
-    // double error = bearingTo(route[nextWp]) - ac.hdg;
-    // if (error > 180) error -= 360;
-    // if (error < -180) error += 360;
+//     if (ac.autoPilot)
+//     {
+//         // Close enough to the waypoint? Aim for the next one. The % wraps back to 0 at the end.
+//         if (distanceTo(route[nextWp]) < 150) {
+//             nextWp = (nextWp + 1) % route.size();
+//         }
 
-    // // An aircraft can't turn instantly, so limit the turn for this time step.
-    // double maxTurn = ac.maxTurnRate * dt;
-    // if (error > maxTurn) error = maxTurn;
-    // if (error < -maxTurn) error = -maxTurn;
+//         // How far must we turn? Between -180 and 180: negative = left, positive = right.
+//         double error = bearingTo(route[nextWp]) - ac.hdg;
+//         if (error > 180) error -= 360;
+//         if (error < -180) error += 360;
 
-    // // Turn, keeping the heading within 0 to 360.
-    // ac.hdg += error;
-    // if (ac.hdg >= 360) ac.hdg -= 360;
-    // if (ac.hdg < 0) ac.hdg += 360;
+//         // An aircraft can't turn instantly, so limit the turn for this time step.
+//         double maxTurn = ac.maxTurnRate * dt;
+//         if (error > maxTurn) error = maxTurn;
+//         if (error < -maxTurn) error = -maxTurn;
 
-    // Move forward, then convert metres into degrees of latitude and longitude.
-    double distance = ac.speed * dt;
-    ac.lat += distance * std::cos(ac.hdg * DEG_TO_RAD) / METRES_PER_DEGREE;
-    ac.lon += distance * std::sin(ac.hdg * DEG_TO_RAD) / (METRES_PER_DEGREE * std::cos(ac.lat * DEG_TO_RAD));
-}
+//         // Turn, keeping the heading within 0 to 360.
+//         ac.hdg += error;
+//         if (ac.hdg >= 360) ac.hdg -= 360;
+//         if (ac.hdg < 0) ac.hdg += 360;
+//     }
+
+//     // Move forward, then convert metres into degrees of latitude and longitude.
+//     double distance = ac.speed * dt;
+//     ac.lat += distance * std::cos(ac.hdg * DEG_TO_RAD) / METRES_PER_DEGREE;
+//     ac.lon += distance * std::sin(ac.hdg * DEG_TO_RAD) / (METRES_PER_DEGREE * std::cos(ac.lat * DEG_TO_RAD));
+// }
 
 void flyStep(double dt) {
-    // What bank angle does this turn need? (a standard "coordinated turn" formula)
-    double turnRate = turnInput * ac.maxTurnRate * DEG_TO_RAD;          // radians per second
-    double targetRoll = std::atan(ac.speed * turnRate / 9.81) * RAD_TO_DEG;
-    if (targetRoll > 30) targetRoll = 30;                                // cap the bank
-    if (targetRoll < -30) targetRoll = -30;
+    if (ac.autoPilot != "true"){
+        // What bank angle does this turn need? (a standard "coordinated turn" formula)
+        double turnRate = turnInput * ac.maxTurnRate * DEG_TO_RAD;          // radians per second
+        double targetRoll = std::atan(ac.speed * turnRate / 9.81) * RAD_TO_DEG;
+        if (targetRoll > 30) targetRoll = 30;                                // cap the bank
+        if (targetRoll < -30) targetRoll = -30;
 
-    // What nose angle does this climb need?
-    double climbRate = altInput * 20;                                    // metres per second (use your own number)
-    double targetPitch = std::atan2(climbRate, ac.speed) * RAD_TO_DEG;
+        // What nose angle does this climb need?
+        double climbRate = altInput * 20;                                    // metres per second (use your own number)
+        double targetPitch = std::atan2(climbRate, ac.speed) * RAD_TO_DEG;
 
-    // Ease towards the targets instead of snapping to them.
-    ac.roll  += (targetRoll  - ac.roll)  * 3 * dt;
-    ac.pitch += (targetPitch - ac.pitch) * 3 * dt;
+        // Ease towards the targets instead of snapping to them.
+        ac.roll  += (targetRoll  - ac.roll)  * 3 * dt;
+        ac.pitch += (targetPitch - ac.pitch) * 3 * dt;
 
-    // if (_kbhit()){
-    //     std::cout << "input buffer has something" << std::endl;
-    //     int c = _getch();
-    //     std::cout << c << std::endl;
-    //     // if (c == 0 || c == 224){
-    //     //     if (_getch() == 72){
-    //     //         ac.speed += 1;
-    //     //     }
-    //     // } 
-    //     if (c == 0 || c == 224){
-    //         switch(_getch()){
-    //             case 72: ac.speed += 100; break; // up
-    //             case 80: ac.speed += -100; break; // down
-    //             case 75: ac.hdg += -1; break; // left
-    //             case 77: ac.hdg += 1; break; // right
-    //         }
-    //     }
-    //     else if (c == ' '){
-    //         ac.alt += 500;
-    //     }
-    //     else if (c == 27){
-    //         ac.alt -= 500;
-    //     }
-    // }
+        // if (_kbhit()){
+        //     std::cout << "input buffer has something" << std::endl;
+        //     int c = _getch();
+        //     std::cout << c << std::endl;
+        //     // if (c == 0 || c == 224){
+        //     //     if (_getch() == 72){
+        //     //         ac.speed += 1;
+        //     //     }
+        //     // } 
+        //     if (c == 0 || c == 224){
+        //         switch(_getch()){
+        //             case 72: ac.speed += 100; break; // up
+        //             case 80: ac.speed += -100; break; // down
+        //             case 75: ac.hdg += -1; break; // left
+        //             case 77: ac.hdg += 1; break; // right
+        //         }
+        //     }
+        //     else if (c == ' '){
+        //         ac.alt += 500;
+        //     }
+        //     else if (c == 27){
+        //         ac.alt -= 500;
+        //     }
+        // }
 
-    // Manual control
-    ac.hdg += turnInput * turnInputMult * ac.maxTurnRate * dt;
-    if (ac.hdg >= 360) ac.hdg -= 360;
-    if (ac.hdg < 0) ac.hdg += 360;
+        // Manual control
+        ac.hdg += turnInput * turnInputMult * ac.maxTurnRate * dt;
+        if (ac.hdg >= 360) ac.hdg -= 360;
+        if (ac.hdg < 0) ac.hdg += 360;
 
-    if (speedInput != 0){
-        speedInputMult += 2;
+        if (speedInput != 0){
+            speedInputMult += 2;
+        }
+        else{
+            speedInputMult = 1;
+        }
+
+        if (altInput != 0){
+            altInputMult += 2;
+        }
+        else{
+            altInputMult = 1;
+        }
+
+        if (turnInput != 0){
+            turnInputMult += 2;
+        }
+        else{
+            turnInputMult = 1;
+        }
+
+        ac.speed += speedInput * 10 * speedInputMult * dt;          // change speed by 10 m/s per second
+        // if (ac.speed < 20) ac.speed = 20;          // keep it in a sensible range
+        // if (ac.speed > 80) ac.speed = 80;
+
+        ac.alt += altInput * 10 * altInputMult * dt;
     }
-    else{
-        speedInputMult = 1;
-    }
+    else {
+        // Close enough to the waypoint? Aim for the next one. The % wraps back to 0 at the end.
+        if (distanceTo(route[nextWp]) < 150) {
+            nextWp = (nextWp + 1) % route.size();
+        }
 
-    if (altInput != 0){
-        altInputMult += 2;
-    }
-    else{
-        altInputMult = 1;
-    }
+        // How far must we turn? Between -180 and 180: negative = left, positive = right.
+        double error = bearingTo(route[nextWp]) - ac.hdg;
+        if (error > 180) error -= 360;
+        if (error < -180) error += 360;
 
-    if (turnInput != 0){
-        turnInputMult += 2;
-    }
-    else{
-        turnInputMult = 1;
-    }
+        // An aircraft can't turn instantly, so limit the turn for this time step.
+        double maxTurn = ac.maxTurnRate * dt;
+        if (error > maxTurn) error = maxTurn;
+        if (error < -maxTurn) error = -maxTurn;
 
-    ac.speed += speedInput * 10 * speedInputMult * dt;          // change speed by 10 m/s per second
-    // if (ac.speed < 20) ac.speed = 20;          // keep it in a sensible range
-    // if (ac.speed > 80) ac.speed = 80;
-
-    ac.alt += altInput * 10 * altInputMult * dt;
+        // Turn, keeping the heading within 0 to 360.
+        ac.hdg += error;
+        if (ac.hdg >= 360) ac.hdg -= 360;
+        if (ac.hdg < 0) ac.hdg += 360;
+    }
 
     double distance = ac.speed * dt;
     ac.lat += distance * std::cos(ac.hdg * DEG_TO_RAD) / METRES_PER_DEGREE;
@@ -196,16 +224,18 @@ void simLoop() {
     
 }
 
-// ---------------------------------------------------------------------------
+
 // JSON helper: field("lat", 5.5) gives  "lat":5.500000
-// ---------------------------------------------------------------------------
 std::string field(std::string name, double value) {
     return "\"" + name + "\":" + std::to_string(value);
 }
 
-// ---------------------------------------------------------------------------
+std::string field(std::string name, std::string value) {
+    return "\"" + name + "\":" + value;
+}
+
+
 // main: start the simulation, then run the web server
-// ---------------------------------------------------------------------------
 int main() {
     // std::thread simThread(simLoop);
     std::thread simThreadFly(simLoop);
@@ -225,6 +255,7 @@ int main() {
                          field("pitch", ac.pitch) + "," +
                          field("roll", ac.roll) + "," +
                          field("speed", ac.speed) + "," +
+                         field("autoPilot", ac.autoPilot) + "," +
                          field("wp", nextWp) + "}";
         }
         res.set_content(json, "application/json");
@@ -241,11 +272,26 @@ int main() {
         res.set_content(json, "application/json");
     });
 
+    server.Get("/api/settings", [](const httplib::Request&, httplib::Response& res) {
+            std::string json;
+            {
+                std::lock_guard<std::mutex> lock(simMutex);
+                json = "{" + field("autoPilot", ac.autoPilot) + "}";
+            }
+            res.set_content(json, "application/json");
+        });
+
     server.Post("/api/control", [](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> lock(simMutex);
-        if (req.has_param("turn"))  turnInput  = std::stod(req.get_param_value("turn"));
-        if (req.has_param("speed")) speedInput = std::stod(req.get_param_value("speed"));
-        if (req.has_param("alt")) altInput = std::stod(req.get_param_value("alt"));
+        if (req.has_param("aut") && req.get_param_value("aut") == "true"){
+            ac.autoPilot = "true";
+        }
+        else{
+            ac.autoPilot = "false";
+            if (req.has_param("turn"))  turnInput  = std::stod(req.get_param_value("turn"));
+            if (req.has_param("speed")) speedInput = std::stod(req.get_param_value("speed"));
+            if (req.has_param("alt")) altInput = std::stod(req.get_param_value("alt"));
+        }
         res.set_content("ok", "text/plain");
     });
 
