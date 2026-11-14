@@ -28,10 +28,20 @@ double speedInputMult = 1;
 double altInputMult = 1;
 double turnInputMult = 1;
 
+double aglMetres = 0;
+bool aglKnown = false;
+double minAgl = 80;
+
 // Data
 struct Waypoint {
     double lat;
     double lon;
+};
+
+struct AutoPilotSettings{
+    double minHeight = 300;
+    double speed = 400;
+    double maxTurnRate = 60;
 };
 
 struct Aircraft {
@@ -40,10 +50,12 @@ struct Aircraft {
     double alt = 100;           // metres
     double hdg = 0;             // heading in degrees, 0 = north, 90 = east
     double speed = 400;          // metres per second
-    double maxTurnRate = 40;    // degrees per second
+    double maxTurnRate = 60;    // degrees per second
     double pitch = 0;
     double roll = 0;
     std::string autoPilot = "false";
+    AutoPilotSettings autoPilotSettings;
+    double planeTooLow = 0;
 };
 
 // The whole simulation state lives in these global variables.
@@ -111,6 +123,13 @@ double distanceTo(Waypoint w) {
 // }
 
 void flyStep(double dt) {
+    if (aglKnown && (aglMetres <= minAgl)){
+        ac.planeTooLow = 1;
+    }
+    else{
+        ac.planeTooLow = 0;
+    }
+
     if (ac.autoPilot != "true"){
         // What bank angle does this turn need? (a standard "coordinated turn" formula)
         double turnRate = turnInput * ac.maxTurnRate * DEG_TO_RAD;          // radians per second
@@ -195,7 +214,7 @@ void flyStep(double dt) {
         if (error < -180) error += 360;
 
         // An aircraft can't turn instantly, so limit the turn for this time step.
-        double maxTurn = ac.maxTurnRate * dt;
+        double maxTurn = ac.autoPilotSettings.maxTurnRate * dt;
         if (error > maxTurn) error = maxTurn;
         if (error < -maxTurn) error = -maxTurn;
 
@@ -203,6 +222,18 @@ void flyStep(double dt) {
         ac.hdg += error;
         if (ac.hdg >= 360) ac.hdg -= 360;
         if (ac.hdg < 0) ac.hdg += 360;
+
+        double speedError = ac.autoPilotSettings.speed - ac.speed;
+        if (speedError > 70) speedError = 70;
+        if (speedError < 70) speedError = -70;
+        ac.speed += speedError;
+
+        if (aglKnown) {
+            double error = ac.autoPilotSettings.minHeight - aglMetres;       // positive = too low
+            if (error > 70) error = 70;           // climb or descend at most 20 m/s
+            if (error < -70) error = -70;
+            ac.alt += error * dt;
+        }
     }
 
     double distance = ac.speed * dt;
@@ -256,6 +287,7 @@ int main() {
                          field("roll", ac.roll) + "," +
                          field("speed", ac.speed) + "," +
                          field("autoPilot", ac.autoPilot) + "," +
+                         field("planeTooLow", ac.planeTooLow) + "," +
                          field("wp", nextWp) + "}";
         }
         res.set_content(json, "application/json");
@@ -283,6 +315,10 @@ int main() {
 
     server.Post("/api/control", [](const httplib::Request& req, httplib::Response& res) {
         std::lock_guard<std::mutex> lock(simMutex);
+        if (req.has_param("agl")) {
+            aglMetres = std::stod(req.get_param_value("agl"));
+            aglKnown = true;
+        }
         if (req.has_param("aut") && req.get_param_value("aut") == "true"){
             ac.autoPilot = "true";
         }
