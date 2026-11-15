@@ -243,13 +243,13 @@ void flyStep(double dt) {
 
 // Runs forever in its own thread: 20 simulation steps per second.
 void simLoop() {
-    const double dt = 0.001;
+    const double dt = 0.01;
     while (true) {
         {
             std::lock_guard<std::mutex> lock(simMutex);   // locked until the closing brace
             flyStep(dt);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     
@@ -263,6 +263,12 @@ std::string field(std::string name, double value) {
 
 std::string field(std::string name, std::string value) {
     return "\"" + name + "\":" + value;
+}
+
+double param(const httplib::Request& req, std::string name, double fallback) {
+    if (!req.has_param(name)) return fallback;
+    try { return std::stod(req.get_param_value(name)); }
+    catch (...) { return fallback; }
 }
 
 
@@ -288,6 +294,9 @@ int main() {
                          field("speed", ac.speed) + "," +
                          field("autoPilot", ac.autoPilot) + "," +
                          field("planeTooLow", ac.planeTooLow) + "," +
+                         field("apMinHeight", ac.autoPilotSettings.minHeight) + "," +
+                         field("apSpeed",     ac.autoPilotSettings.speed) + "," +
+                         field("apMaxTurn",   ac.autoPilotSettings.maxTurnRate) + "," +
                          field("wp", nextWp) + "}";
         }
         res.set_content(json, "application/json");
@@ -328,6 +337,22 @@ int main() {
             if (req.has_param("speed")) speedInput = std::stod(req.get_param_value("speed"));
             if (req.has_param("alt")) altInput = std::stod(req.get_param_value("alt"));
         }
+        res.set_content("ok", "text/plain");
+    });
+
+    server.Post("/api/autopilot", [](const httplib::Request& req, httplib::Response& res) {
+        double minHeight   = param(req, "minHeight", -1);
+        double speed       = param(req, "speed", -1);
+        double maxTurnRate = param(req, "maxTurnRate", -1);
+        if (minHeight < 0 || minHeight > 5000 || speed < 20 || speed > 600 || maxTurnRate < 1 || maxTurnRate > 90) {
+            res.status = 400;                       // never trust the browser
+            res.set_content("out of range", "text/plain");
+            return;
+        }
+        std::lock_guard<std::mutex> lock(simMutex);
+        ac.autoPilotSettings.minHeight   = minHeight;
+        ac.autoPilotSettings.speed       = speed;
+        ac.autoPilotSettings.maxTurnRate = maxTurnRate;
         res.set_content("ok", "text/plain");
     });
 
