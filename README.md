@@ -2,6 +2,24 @@
 
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
+## Contents
+- [Finite State Machine](#finite-state-machine)
+- [Autopilot Mission](#autopilot-mission)
+  - [C++ Server starts with UAV at S-Plane Automation in Sommerset West, Cape Town](#c-server-starts-with-uav-at-s-plane-automation-in-sommerset-west-cape-town)
+  - [Wap Points](#wap-points)
+- [GCC](#gcc)
+  - [Primary Modes](#primary-modes)
+  - [State Awarness](#state-awarness)
+  - [More Error Prevention](#more-error-prevention)
+- [Manual Mode](#manual-mode)
+  - [Manul Mode Controls](#manul-mode-controls)
+    - [Turn Directions](#turn-directions)
+    - [Vertical Directions](#vertical-directions)
+- [Setup](#setup)
+- [Run](#run)
+
+## Finite State Machine
+
 The following finite state machine gives a broad overview of the system:
 
 <img src="assets/FSM.png" width="100%"><br>
