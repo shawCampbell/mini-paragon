@@ -5,7 +5,7 @@ A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3
 <p align="center"><img src="assets/mission.png" width="70%"></p>
 
 The goal is to provide a minimally working version of a simulated GCC (ground controls console) with some form of C2 (command and control) and exploitation of ISR sensor payloads. In this case, the following has been implemented:
-#### **CS:**
+#### **C2:**
 - Ability to toggle autopilot and manual control for virtual UAV, as well as view telemetry. 
 #### **ISR Payload:**
 - Camera feed from UAV. In this case, the camera feed is in the third person, which is very unrealistic.
