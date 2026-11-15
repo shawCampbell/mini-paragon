@@ -8,48 +8,69 @@
   <style>
     html, body, #map { margin: 0; width: 100%; height: 100%; overflow: hidden; }
     #hud {
-      position: absolute; top: 12px; left: 12px; padding: 10px 14px;
+      position: absolute; top: 12px; left: 12px; min-width: 220px; padding: 10px 14px;
       background: rgba(10, 20, 30, 0.75); color: #e5e7e5;
       font: 14px/1.5 monospace; white-space: pre;
-      border: 1px solid rgb(9, 9, 9); border-radius: 4px; min-width: 170px;
+      border: 2px solid #e5e7e5;
     }
-    #hud.lost { color: #ff5555; border-color: #ff5555; }
+    #hud.ok    { border-color: #2ecc71; }
+    #hud.warn  { border-color: #f5a623; }
+    #hud.alert { border-color: #ff4d4d; }
+    #hud .title { font-weight: bold; margin-bottom: 4px; }
+    #hud .warn  { color: #f5a623; }
+    #hud .alert { color: #ff4d4d; }
+    #hud .dim   { color: #8a949e; }
   </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="hud">connecting...</div>
+<div id="hud"></div>
 
 <script>
-  // Paste your free token from https://ion.cesium.com 
+  // Paste your free token from https://ion.cesium.com
   const CESIUM_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjRfSHpBUFR0cUFRUGMwUWEiLCJqdGkiOiI3MjFhZDllOC0yM2I1LTRmNzktYWQyOC04NjFhNTc1ODgxNTIiLCJpZCI6NTQ4NDg0LCJzdWIiOiJzaGF3Q2FtcGJlbGwiLCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoibWluaS1wYXJhZ29uIiwiaWF0IjoxNzk0NTU4OTY5fQ.Tvzmqkq1e2SA8zuoXRPUA3IyTLUo-c1vWzse3kcLvKM";
+
+  // Card rules: edit these
+  const AGL_WARN_FT  = 800;     // AGL below this turns amber
+  const AGL_ALERT_FT = 400;     // AGL below this turns red
+
+  // Autopilot settings. key = name sent to the server, telem = name the server reports back.
+  // Keep min/max in step with the checks in the C++ /api/autopilot handler.
+  const AP_FIELDS = [
+    { key: "minHeight",   telem: "apMinHeight", label: "MIN HEIGHT", unit: "m",     step: 10, min: 0,  max: 5000 },
+    { key: "speed",       telem: "apSpeed",     label: "SPEED",      unit: "m/s",   step: 10, min: 20, max: 600 },
+    { key: "maxTurnRate", telem: "apMaxTurn",   label: "MAX TURN",   unit: "deg/s", step: 5,  min: 1,  max: 90 },
+  ];
 
   Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
   const viewer = new Cesium.Viewer("map", { terrain: Cesium.Terrain.fromWorldTerrain() });
+  viewer.resolutionScale = 0.5;                      // draw at half width and height (a quarter of the pixels)
+  viewer.scene.globe.maximumScreenSpaceError = 4;    // coarser terrain and imagery tiles (default is 2)
   const hud = document.getElementById("hud");
 
-  // let autoPilot = "false";
-
-  // --- The aircraft and its track -------------------------------------------
+  // State
+  let autoPilot = false;
+  let latest = null;        // newest telemetry
+  let linkOk = false;       // are we receiving telemetry?
+  let latestAgl;            // height above ground in metres (undefined until terrain loads)
+  let route = [];           // waypoints
+  let card = "pilot";       // which card is showing: "pilot" or "mission"
+  let confirming = null;    // an open Y/N question: { text, action }
+  let confirmTimer;
+  let apSel = 0;            // which autopilot setting is selected
+  let edits = {};           // settings changed on screen but not yet applied
+  let apMessage = null;     // result of the last apply: { text, level }
   const trackPoints = [];   // every position the aircraft has been at
-  let latestAgl;
 
-  // const aircraft = viewer.entities.add({
-  //   position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
-  //   point: { pixelSize: 12, color: Cesium.Color.YELLOW, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
-  //   label: { text: "UAV-01", font: "13px monospace", pixelOffset: new Cesium.Cartesian2(0, -22),
-  //            showBackground: true },
-  // });
-
+  // The aircraft and its track 
   const aircraft = viewer.entities.add({
-  position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
-  model: {
-    uri: "/jet.glb",
-    scale: 0.1
-    // minimumPixelSize: 80,    // never shrink below 64 px, so it stays visible from far away
-  },
-  label: { text: "UAV-01", font: "13px monospace", pixelOffset: new Cesium.Cartesian2(0, -40),
-           showBackground: true },
+    position: Cesium.Cartesian3.fromDegrees(18.85, -34.15, 500),
+    model: {
+      uri: "/jet.glb",
+      scale: 0.1,
+    },
+    label: { text: "UAV-01", font: "13px monospace", pixelOffset: new Cesium.Cartesian2(0, -40),
+             showBackground: true },
   });
 
   viewer.entities.add({
@@ -60,10 +81,10 @@
     },
   });
 
-  // --- The planned route (fetched once) ---------------------------------------
+  // The planned route (fetched once)
   async function loadRoute() {
     const response = await fetch("/api/route");
-    const route = await response.json();
+    route = await response.json();
 
     // Draw the line through all the waypoints, back to the first to close the loop.
     const flat = [];
@@ -94,13 +115,132 @@
   }
   loadRoute();
 
-  // --- Telemetry: ask the C++ server for the aircraft's state, 10 times a second --
-  let cameraFollowing = false;
+  // Cards
+  // A card is a title plus lines of text. Each line can have a level: "warn", "alert" or "dim".
+  // The card's border takes the worst level of its lines.
+  function setCard(title, lines) {
+    let level = "ok";
+    for (const line of lines) {
+      if (line.level === "alert") level = "alert";
+      else if (line.level === "warn" && level !== "alert") level = "warn";
+    }
+    hud.className = level;
+    hud.textContent = "";
 
+    const heading = document.createElement("div");
+    heading.className = "title";
+    heading.textContent = title;
+    hud.appendChild(heading);
+
+    for (const line of lines) {
+      const row = document.createElement("div");
+      row.className = line.level || "";
+      row.textContent = line.text;
+      hud.appendChild(row);
+    }
+  }
+
+  function pilotLines(t) {
+    const aglFt = (latestAgl === undefined) ? undefined : latestAgl * 3.281;
+    let aglLevel = "warn";                                   // unknown counts as a warning
+    if (aglFt !== undefined) {
+      if (aglFt < AGL_ALERT_FT)     aglLevel = "alert";
+      else if (aglFt < AGL_WARN_FT) aglLevel = "warn";
+      else                          aglLevel = "";
+    }
+
+    const lines = [
+      { text: "MODE " + (autoPilot ? "AUTOPILOT" : "MANUAL") },
+      { text: "HDG  " + Math.round(t.hdg) + "°" },
+      { text: "SPD  " + Math.round(t.speed * 1.944) + " kt" },      // metres/second to knots
+      { text: "ALT  " + Math.round(t.alt * 3.281) + " ft" },        // metres to feet
+      { text: "AGL  " + (aglFt === undefined ? "---" : Math.round(aglFt) + " ft"), level: aglLevel },
+    ];
+    if (t.planeTooLow !== undefined && Number(t.planeTooLow) === 1) {
+      lines.push({ text: "TOO LOW", level: "alert" });
+    }
+    lines.push({ text: "J/L turn  I/K speed  A/S alt", level: "dim" });
+    return lines;
+  }
+
+  function missionLines(t) {
+    const lines = [];
+    for (let i = 0; i < route.length; i++) {
+      const marker = (i === t.wp) ? "> " : "  ";                    // > = the waypoint we are flying to
+      lines.push({ text: marker + "WP" + i + "  " + route[i].lat.toFixed(4) + ", " + route[i].lon.toFixed(4) });
+    }
+    if (route.length === 0) lines.push({ text: "no route", level: "warn" });
+    return lines;
+  }
+
+  function apLines(t) {
+    const lines = [];
+    for (let i = 0; i < AP_FIELDS.length; i++) {
+      const f = AP_FIELDS[i];
+      const current = t[f.telem];
+      const edited = (edits[f.key] !== undefined);
+      let text = (i === apSel ? "> " : "  ") + f.label.padEnd(11) + (current === undefined ? "---" : Math.round(current));
+      if (edited) text += " -> " + edits[f.key];
+      text += " " + f.unit;
+      lines.push({ text: text, level: edited ? "warn" : "" });
+    }
+    if (apMessage) lines.push({ text: apMessage.text, level: apMessage.level });
+    lines.push({ text: "Up/Down select  Left/Right change  Enter apply", level: "dim" });
+    return lines;
+  }
+
+  function changeSetting(direction) {
+    const f = AP_FIELDS[apSel];
+    if (!linkOk || latest[f.telem] === undefined) return;
+    const base = (edits[f.key] !== undefined) ? edits[f.key] : latest[f.telem];
+    let value = base + direction * f.step;
+    if (value < f.min) value = f.min;
+    if (value > f.max) value = f.max;
+    if (value === latest[f.telem]) delete edits[f.key];     // changed back to what the aircraft has
+    else                           edits[f.key] = value;
+    apMessage = null;
+  }
+
+  function applySettings() {
+    if (Object.keys(edits).length === 0) return;
+    ask("APPLY AUTOPILOT SETTINGS? Y/N", async () => {
+      let url = "/api/autopilot?";
+      for (const f of AP_FIELDS) {                          // send the whole set, changed or not
+        const value = (edits[f.key] !== undefined) ? edits[f.key] : latest[f.telem];
+        url += f.key + "=" + value + "&";
+      }
+      try {
+        const response = await fetch(url, { method: "POST" });
+        if (response.ok) { edits = {}; apMessage = { text: "SETTINGS ACCEPTED", level: "" }; }
+        else             { apMessage = { text: "SETTINGS REJECTED", level: "alert" }; }
+      } catch (error) {
+        apMessage = { text: "NO REPLY FROM AIRCRAFT", level: "alert" };
+      }
+      draw();
+    });
+  }
+
+  function draw() {
+    if (!linkOk) {
+      setCard("LINK LOST", [{ text: "no telemetry", level: "alert" }]);
+      return;
+    }
+    let lines, title;
+    if (card === "pilot")        { lines = pilotLines(latest);   title = "PILOT"; }
+    else if (card === "mission") { lines = missionLines(latest); title = "MISSION"; }
+    else                         { lines = apLines(latest);      title = "AUTOPILOT SETTINGS"; }
+    if (confirming) lines.push({ text: confirming.text, level: "warn" });
+    lines.push({ text: "[1] PILOT  [2] MISSION  [3] AUTOPILOT  [P] MODE", level: "dim" });
+    setCard(title, lines);
+  }
+
+  // --- Telemetry: ask the C++ server for the aircraft's state, 10 times a second --
   async function updateTelemetry() {
     try {
       const response = await fetch("/api/telemetry");
       const t = await response.json();
+      latest = t;
+      linkOk = true;
 
       const position = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, t.alt);
       aircraft.position = position;
@@ -111,9 +251,9 @@
       aircraft.orientation = Cesium.Transforms.headingPitchRollQuaternion(
         position,
         new Cesium.HeadingPitchRoll(
-          Cesium.Math.toRadians(t.hdg - 90),   // keep whatever heading offset you already found
-          Cesium.Math.toRadians(t.pitch*50),
-          Cesium.Math.toRadians(t.roll*5)
+          Cesium.Math.toRadians(t.hdg - 90),
+          Cesium.Math.toRadians(t.pitch * 50),
+          Cesium.Math.toRadians(t.roll * 5)
         )
       );
 
@@ -122,61 +262,84 @@
         trackPoints.shift();            // forget the oldest point so the line stays short
       }
 
-      hud.className = "";
-      hud.textContent =
-        "Telemetry \n UAV-01\n" +
-        " HDG " + Math.round(t.hdg) + "°\n" +
-        " SPD " + Math.round(t.speed * 1.944) + " kt\n" +      // metres/second to knots
-        " ALT " + Math.round(t.alt * 3.281) + " ft\n" +        // metres to feet
-        " WP  " + t.wp + "\nControls \n J: turn left\n L: turn right\n I: increase speed\n K: decrease speed\n A: increase altitude\n S: decrease altitude"
-         + "\nAuto-Pilot: " + autoPilot + 
-         "\nPlane-Too-Low: " + t.planeTooLow + 
-         "\nAGL: " + (latestAgl === undefined ? "-" : Math.round(latestAgl * 3.281)) + " ft";
-      if (!cameraFollowing) {            // lock the camera onto the aircraft once
-        viewer.trackedEntity = aircraft;
-        cameraFollowing = true;
-      }
+      viewer.camera.lookAt(
+        position,
+        new Cesium.HeadingPitchRange(
+          Cesium.Math.toRadians(t.hdg),     // look the same way the aircraft is flying
+          Cesium.Math.toRadians(-10),       // looking 10 degrees downwards
+          90                                // 50 m behind it
+        )
+      );
     } catch (error) {
-      hud.className = "lost";
-      hud.textContent = "LINK LOST";
+      linkOk = false;
     }
+    draw();
   }
   setInterval(updateTelemetry, 100);
 
-  // --- Keyboard: remember which keys are held, and report them to the server ---
+  // Keyboard
   const held = {};
 
-  document.addEventListener("keydown", (e) => { held[e.key.toLowerCase()] = true; });
-  document.addEventListener("keyup",   (e) => { held[e.key.toLowerCase()] = false; });
+  // Ask a Y/N question on the card. Y runs the action. Any other key, or 5 seconds, cancels.
+  function ask(text, action) {
+    confirming = { text: text, action: action };
+    clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(() => { confirming = null; draw(); }, 5000);
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.repeat) return;                       // ignore the keyboard's auto-repeat
+    const key = e.key.toLowerCase();
+
+    if (confirming) {                           // a question is open: this key is the answer
+      if (key === "y") confirming.action();
+      confirming = null;
+      draw();
+      return;
+    }
+
+    held[key] = true;
+    if (key === "1") card = "pilot";
+    if (key === "2") card = "mission";
+    if (key === "3") card = "autopilot";
+    if (card === "autopilot") {
+      if (key === "arrowup")    apSel = (apSel + AP_FIELDS.length - 1) % AP_FIELDS.length;
+      if (key === "arrowdown")  apSel = (apSel + 1) % AP_FIELDS.length;
+      if (key === "arrowleft")  changeSetting(-1);
+      if (key === "arrowright") changeSetting(1);
+      if (key === "enter")      applySettings();
+    }
+    if (key === "p") {
+      if (autoPilot) ask("TAKE MANUAL CONTROL? Y/N", () => { autoPilot = false; });
+      else           ask("ENGAGE AUTOPILOT? Y/N",    () => { autoPilot = true; });
+    }
+    draw();
+  });
+
+  document.addEventListener("keyup", (e) => { held[e.key.toLowerCase()] = false; });
   window.addEventListener("blur", () => {          // clicking away must release all keys
     for (const key in held) held[key] = false;
   });
 
-  let autoPilot = false;
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key.toLowerCase() === "p") autoPilot = !autoPilot;   // P toggles autopilot
-  });
-
+  // Report the held keys to the server, 10 times a second
   setInterval(() => {
     let turn = 0;
     let speed = 0;
     let alt = 0;
 
-    if (!autoPilot){
+    if (!autoPilot) {
       if (held["j"]) turn -= 1;     // J = left
       if (held["l"]) turn += 1;     // L = right
       if (held["i"]) speed += 1;    // I = faster
       if (held["k"]) speed -= 1;    // K = slower
-      if (held["a"]) alt += 1; // A = higher
-      if (held["s"]) alt -= 1; // S = lower
+      if (held["a"]) alt += 1;      // A = higher
+      if (held["s"]) alt -= 1;      // S = lower
     }
 
     let url = "/api/control?turn=" + turn + "&speed=" + speed + "&alt=" + alt + "&aut=" + autoPilot;
     if (latestAgl !== undefined) url += "&agl=" + latestAgl.toFixed(1);
     fetch(url, { method: "POST" });
   }, 100);
-
 </script>
 </body>
 </html>
