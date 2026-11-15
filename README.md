@@ -2,7 +2,8 @@
 
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
-<img src="assets/mission.png" width="100%">
+<p align="center"><img src="assets/mission.png" width="70%"></p>
+
 
 ## Contents
 - [Finite State Machine](#finite-state-machine)
@@ -38,7 +39,6 @@ The UAV model on the C++ server is initialsed with the following fields:
 double lat = -34.15;        
 double lon = 18.85; 
 ```
-
 <table>
   <tr>
     <td align="center">
