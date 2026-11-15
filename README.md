@@ -2,6 +2,8 @@
 
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
+<img src="assets/mission.png" width="100%">
+
 ## Contents
 - [Finite State Machine](#finite-state-machine)
 - [Autopilot Mission](#autopilot-mission)
