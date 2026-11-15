@@ -2,7 +2,11 @@
 
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
-### C++ Server starts with UAV at S-Plane Automation in Sommerset West, Cape Town
+## Autopilot Mission
+
+When UAV in autopilot mode, it will navigate to way points in a loop from a starting spawn point.
+
+#### C++ Server starts with UAV at S-Plane Automation in Sommerset West, Cape Town
 
 The UAV model on the C++ server is initialsed with the following fields:
 ```
@@ -10,13 +14,6 @@ double lat = -34.15;
 double lon = 18.85; 
 ```
 
-<!-- <div align='center'>
-<img src='./assets/demo_1.png'  width='95%'>
-Starting point of UAV in 3D environment
-</div>
-
-<div align='center'>
-<img src='./assets/s-plan-map.png' width='50%'> -->
 <table>
   <tr>
     <td align="center">
@@ -32,46 +29,162 @@ Starting point of UAV in 3D environment
   </tr>
 </table>
 
+#### Wap Points
 
-### HUD Provides Telemetry and Controls Information
+C++ server has preprogrammed set of way points and global variable for next target way point:
+```
+std::vector<Waypoint> route = {
+    {-34.15, 18.85},
+    {-34.10, 18.95},
+    {-34.18, 19.00},
+    {-34.22, 18.88},
+};
+int nextWp = 1; 
+```
 
-<div align='center'>
-<img src='./assets/HUD.png' width='50%'>
 
-HUD
+
+<!-- <div align='center'>
+<img src='./assets/demo_1.png'  width='95%'>
+Starting point of UAV in 3D environment
 </div>
 
-### Controls
-#### Turn Directions
+<div align='center'>
+<img src='./assets/s-plan-map.png' width='50%'> -->
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/wps.png" width="350"><br>
+      <b>Wap points aerial view</b><br>
+    </td>
+    <td align="center">
+      <img src="assets/mission.png" width="450"><br>
+      <b>mission mapped onto earth surface</b><br>
+    </td>
+  </tr>
+</table>
+
+
+## GCC 
+
+### Primary Modes
+
+The GCC (Ground Countrol Centre) has three primary modes.
 
 <table>
   <tr>
     <td align="center">
-      <img src="assets/turn.png" width="250"><br>
-      <b>Turn right</b><br>
+      <img src="assets/gcc1.png" width="250"><br>
+      <b>Pilot Mode</b><br>
+      Shows whether UAV in manual or pilot mode, as well as telemetry.
+    </td>
+    <td align="center">
+      <img src="assets/gcc2.png" width="250"><br>
+      <b>Mission Mode</b><br>
+      Shows list of way-points, and currently pursued way-point.
+    </td>
+        <td align="center">
+      <img src="assets/gcc3.png" width="250"><br>
+      <b>Autopilot Mode</b><br>
+      Provides a way to change autopilot settings.
+    </td>
+  </tr>
+</table>
+
+Changing to autopilot can be done from any mode, with UI contructs to prevent mistakes:
+
+<img src="assets/ap_change.png" width="350"><br>
+      <b>Change to autopilot</b><br>
+      Warning message and yellow colour form part of UI design heuristics for state awareness and error reduction.
+
+### State Awarness
+
+Based on the AGL field (above ground level) from the telemetry, the UI uses three colours to ensure state awareness:
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/st1.png" width="250"><br>
+      <b>Healthy AGL state (green)</b><br>
       <!-- Turn direction indicator -->
     </td>
     <td align="center">
-      <img src="assets/turn-2.png" width="250"><br>
-      <b>Turn left</b><br>
+      <img src="assets/st2.png" width="250"><br>
+      <b>Moderate AGL state (amber)</b><br>
+      <!-- Alternative turn indicator -->
+    </td>
+        <td align="center">
+      <img src="assets/st3.png" width="250"><br>
+      <b>Dangerous AGL state (red)</b><br>
       <!-- Alternative turn indicator -->
     </td>
   </tr>
 </table>
 
-#### Vertical Directions
+### More Error Prevention
+
+A common design heuristic is too prevent invalid user input altogether. In this case, manual control cannot be done while in autopilot mode, and if autopilot settings fall out of a threshold, they are rejected by the UAV:
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/settings-rej.png" width="350"><br>
+      <b>Autopilot settings update rejected (red with failure notification)</b><br>
+      <!-- Turn direction indicator -->
+    </td>
+    <td align="center">
+      <img src="assets/settings-acc.png" width="350"><br>
+      <b>Autopilot settings update accepted (green with success notification)</b><br>
+      <!-- Alternative turn indicator -->
+    </td>
+  </tr>
+</table>
+
+
+## Manual Mode
+#### Manul Mode Controls
+##### Turn Directions
+
+There is much to be desired in terms of aerial mechanics and reactivity from the UI here, but the following are the controls usable when not in autopilot:
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/turn.png" width="250"><br>
+      <b>Turn right (L)</b><br>
+      <!-- Turn direction indicator -->
+    </td>
+    <td align="center">
+      <img src="assets/turn-2.png" width="250"><br>
+      <b>Turn left (J)</b><br>
+      <!-- Alternative turn indicator -->
+    </td>
+    <td align="center">
+      <img src="assets/speed.png" width="250"><br>
+      <b>Increase speed (I)</b><br>
+      <!-- Alternative turn indicator -->
+    </td>
+  </tr>
+</table>
+
+##### Vertical Directions
 
 <table>
   <tr>
     <td align="center">
       <img src="assets/up.png" width="250"><br>
-      <b>Turn Up</b><br>
+      <b>Turn Up (A)</b><br>
       <!-- Upward direction indicator -->
     </td>
     <td align="center">
       <img src="assets/down.png" width="250"><br>
-      <b>Turn Down</b><br>
+      <b>Turn Down (S)</b><br>
       <!-- Downward direction indicator -->
+    </td>
+    <td align="center">
+      <img src="assets/slow.png" width="250"><br>
+      <b>Decrease Speed (K)</b><br>
+      <!-- Alternative turn indicator -->
     </td>
   </tr>
 </table>
