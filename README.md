@@ -4,7 +4,7 @@ A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3
 
 The following finite state machine gives a broad overview of the system:
 
-<img src="assets/FSM.png" width="550"><br>
+<img src="assets/FSM.png" width="100%"><br>
       <b>Summarised FSM of system.</b><br>
 
 ## Autopilot Mission
