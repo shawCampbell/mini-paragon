@@ -2,6 +2,11 @@
 
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
+The following finite state machine gives a broad overview of the system:
+
+<img src="assets/FSM.png" width="550"><br>
+      <b>Summarised FSM of system.</b><br>
+
 ## Autopilot Mission
 
 When UAV in autopilot mode, it will navigate to way points in a loop from a starting spawn point.
