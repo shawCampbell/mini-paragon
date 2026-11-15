@@ -4,6 +4,12 @@ A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3
 
 <p align="center"><img src="assets/mission.png" width="70%"></p>
 
+The goal is to provide a minimally working version of a simulated GCC (ground controls console) with some form of C2 (command and control) and exploitation of ISR sensor payloads. In this case, the following has been implemented:
+**CS:**
+- ability to toggle autopilot and manual control for virtual UAV.
+**ISR Payload:**
+- Camera feed from UAV. In this case, the camera feed is in the third person, which is very unrealistic.
+
 
 ## Contents
 - [Finite State Machine](#finite-state-machine)
@@ -94,7 +100,7 @@ Starting point of UAV in 3D environment
 
 ### Primary Modes
 
-The GCC (Ground Countrol Centre) has three primary modes.
+The GCC (Ground Countrol Console) has three primary modes.
 
 <table>
   <tr>
