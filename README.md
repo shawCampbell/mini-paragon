@@ -205,11 +205,15 @@ There is much to be desired in terms of aerial mechanics and reactivity from the
 ```powershell
 g++ -std=c++17 server.cpp -o server.exe -pthread -lws2_32
 ```
-2. Run server (Windows)
+2. Add Cesium Token (free plan token after sign up) to field in index.html
+   ```
+   const CESIUM_TOKEN = "<YOUR TOKEN>";
+   ```
+3. Run server (Windows)
 ```powershell
 ./server
 ```
-3. Open http://localhost8080 on a browser
+4. Open http://localhost8080 on a browser
 
 
 
