@@ -3,10 +3,27 @@
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
 <img src="assets/mission.png" width="100%">
+## Contents
+- [Finite State Machine](#finite-state-machine)
+- [Autopilot Mission](#autopilot-mission)
+  - [C++ Server starts with UAV at S-Plane Automation in Sommerset West, Cape Town](#c-server-starts-with-uav-at-s-plane-automation-in-sommerset-west-cape-town)
+  - [Wap Points](#wap-points)
+- [GCC](#gcc)
+  - [Primary Modes](#primary-modes)
+  - [State Awarness](#state-awarness)
+  - [More Error Prevention](#more-error-prevention)
+- [Manual Mode](#manual-mode)
+  - [Manul Mode Controls](#manul-mode-controls)
+    - [Turn Directions](#turn-directions)
+    - [Vertical Directions](#vertical-directions)
+- [Setup](#setup)
+- [Run](#run)
+
+## Finite State Machine
 
 The following finite state machine gives a broad overview of the system:
 
-<img src="assets/FSM.png" width="550"><br>
+<img src="assets/FSM.png" width="100%"><br>
       <b>Summarised FSM of system.</b><br>
 
 ## Autopilot Mission
@@ -212,11 +229,15 @@ There is much to be desired in terms of aerial mechanics and reactivity from the
 ```powershell
 g++ -std=c++17 server.cpp -o server.exe -pthread -lws2_32
 ```
-2. Run server (Windows)
+2. Add Cesium Token (free plan token after sign up) to field in index.html
+   ```
+   const CESIUM_TOKEN = "<YOUR TOKEN>";
+   ```
+3. Run server (Windows)
 ```powershell
 ./server
 ```
-3. Open http://localhost8080 on a browser
+4. Open http://localhost8080 on a browser
 
 
 
