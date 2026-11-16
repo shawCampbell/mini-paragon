@@ -1,5 +1,11 @@
 # Mini Paragon
 
+<div align="center">
+
+###  *s* = σ + *i*ω 
+
+</div>
+
 A tiny ground-control demo: a C++ aircraft sim streams telemetry to a CesiumJS 3D globe in your browser.
 
 <p align="center"><img src="assets/mission.png" width="70%"></p>
