@@ -21,7 +21,7 @@ The goal is to provide a minimally working version of a simulated GCC (ground co
 - [Finite State Machine](#finite-state-machine)
 - [Autopilot Mission](#autopilot-mission)
   - [C++ Server starts with UAV at S-Plane Automation in Sommerset West, Cape Town](#c-server-starts-with-uav-at-s-plane-automation-in-sommerset-west-cape-town)
-  - [Wap Points](#wap-points)
+  - [Way Points](#way-points)
 - [GCC](#gcc)
   - [Primary Modes](#primary-modes)
   - [State Awarness](#state-awarness)
@@ -66,7 +66,7 @@ double lon = 18.85;
   </tr>
 </table>
 
-#### Wap Points
+#### Way Points
 
 C++ server has preprogrammed set of way points and global variable for next target way point:
 ```
